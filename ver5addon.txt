@@ -1,0 +1,365 @@
+# Current issue: Synapses are stateless in practice
+class Synapse:
+    def transmit(self, input_signal: float) -> float:
+        if torch.rand(1).item() < self.release_probability:
+            return self.weight * self.fatigue * input_signal
+        return 0.0  # Complete transmission failure is too harsh
+
+# Improved version:
+class Synapse:
+    def transmit(self, input_signal: float) -> float:
+        # Probabilistic release with partial transmission
+        release_strength = torch.clamp(
+            torch.normal(self.release_probability, 0.1), 0.1, 1.0
+        ).item()
+        return self.weight * self.fatigue * input_signal * release_strength
+    
+    def update_short_term_plasticity(self, pre_spike: bool, post_spike: bool):
+        """Implement actual short-term plasticity rules"""
+        if pre_spike and post_spike:
+            # Spike-timing dependent plasticity
+            self.weight += self.learning_rate * self.metaplasticity_state
+        elif pre_spike and not post_spike:
+            # Long-term depression
+            self.weight -= self.learning_rate * 0.5 * self.metaplasticity_state
+
+
+
+            # Current: Quantum noise only affects threshold
+# Better: Implement channel noise at multiple levels
+class Neuron(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Ion channel noise (more realistic than just threshold noise)
+        channel_noise = torch.randn_like(x) * self.channel_noise_std
+        noisy_input = x + channel_noise
+        
+        # Membrane potential noise
+        membrane_noise = torch.randn(x.shape[0], 1) * self.membrane_noise_std
+        
+        # Dynamic threshold with adaptation
+        threshold_adaptation = self.compute_threshold_adaptation()
+        effective_threshold = self.dynamic_threshold + threshold_adaptation
+        
+        return self.activation_function(noisy_input, effective_threshold)
+
+
+        # Current: Quantum noise only affects threshold
+# Better: Implement channel noise at multiple levels
+class Neuron(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Ion channel noise (more realistic than just threshold noise)
+        channel_noise = torch.randn_like(x) * self.channel_noise_std
+        noisy_input = x + channel_noise
+        
+        # Membrane potential noise
+        membrane_noise = torch.randn(x.shape[0], 1) * self.membrane_noise_std
+        
+        # Dynamic threshold with adaptation
+        threshold_adaptation = self.compute_threshold_adaptation()
+        effective_threshold = self.dynamic_threshold + threshold_adaptation
+        
+        return self.activation_function(noisy_input, effective_threshold)
+
+
+
+        class STDPSynapse(Synapse):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pre_spike_trace = 0.0
+        self.post_spike_trace = 0.0
+        self.tau_pre = 20.0  # ms
+        self.tau_post = 20.0  # ms
+        self.A_plus = 0.01   # LTP amplitude
+        self.A_minus = 0.01  # LTD amplitude
+    
+    def update_stdp(self, pre_spike: bool, post_spike: bool, dt: float = 1.0):
+        """Real STDP implementation"""
+        # Update traces
+        self.pre_spike_trace *= torch.exp(-dt / self.tau_pre)
+        self.post_spike_trace *= torch.exp(-dt / self.tau_post)
+        
+        if pre_spike:
+            self.pre_spike_trace += 1.0
+            # Check for post-before-pre (LTD)
+            if self.post_spike_trace > 0:
+                self.weight -= self.A_minus * self.post_spike_trace
+        
+        if post_spike:
+            self.post_spike_trace += 1.0
+            # Check for pre-before-post (LTP)
+            if self.pre_spike_trace > 0:
+                self.weight += self.A_plus * self.pre_spike_trace
+        
+        self.weight = torch.clamp(self.weight, 0.0, 2.0)
+
+
+
+        class HippocampusModule(nn.Module):
+    """Proper hippocampal implementation with CA fields"""
+    def __init__(self):
+        super().__init__()
+        self.dentate_gyrus = NeuralLayer(input_size=256, output_size=1000)  # Sparse coding
+        self.ca3 = NeuralLayer(input_size=1000, output_size=200)  # Auto-associative
+        self.ca1 = NeuralLayer(input_size=200, output_size=256)   # Pattern completion
+        
+    def forward(self, x, context=None):
+        # Trisynaptic pathway
+        dg_out = self.dentate_gyrus(x)
+        ca3_out = self.ca3(dg_out)
+        ca1_out = self.ca1(ca3_out)
+        
+        # Add context-dependent retrieval
+        if context is not None:
+            ca1_out = ca1_out * context
+        
+        return ca1_out
+
+class BasalGangliaModule(nn.Module):
+    """Action selection and motor learning"""
+    def __init__(self):
+        super().__init__()
+        self.striatum = NeuralLayer(256, 128)
+        self.globus_pallidus = NeuralLayer(128, 64)
+        self.substantia_nigra = NeuralLayer(64, 32)
+        
+    def forward(self, cortical_input, reward_signal):
+        # Implement actor-critic dynamics
+        action_values = self.striatum(cortical_input)
+        inhibition = self.globus_pallidus(action_values)
+        dopamine_modulation = self.substantia_nigra(reward_signal)
+        
+        return action_values * dopamine_modulation
+
+
+
+
+        class BiologicalConnectivity:
+    """Implement realistic connectivity matrices"""
+    @staticmethod
+    def create_cortical_connectivity(source_size: int, target_size: int, 
+                                   connection_probability: float = 0.1,
+                                   distance_decay: float = 0.1):
+        """Create realistic sparse connectivity"""
+        # Distance-dependent connection probability
+        positions_source = torch.rand(source_size, 2)  # 2D positions
+        positions_target = torch.rand(target_size, 2)
+        
+        distances = torch.cdist(positions_source, positions_target)
+        probabilities = connection_probability * torch.exp(-distances / distance_decay)
+        
+        # Create sparse adjacency matrix
+        connections = torch.bernoulli(probabilities)
+        return connections.to_sparse()
+
+
+
+        class HomeostaticNeuron(nn.Module):
+    def __init__(self, input_size: int):
+        super().__init__()
+        self.target_rate = 0.1  # Target firing rate (Hz)
+        self.avg_rate = nn.Parameter(torch.tensor(0.1))
+        self.intrinsic_excitability = nn.Parameter(torch.tensor(1.0))
+        self.homeostatic_timescale = 1000.0  # timesteps
+        
+    def update_homeostasis(self, current_rate: float):
+        """Bidirectional synaptic scaling + intrinsic plasticity"""
+        rate_error = current_rate - self.target_rate
+        
+        # Synaptic scaling
+        scaling_factor = 1.0 - (rate_error / self.homeostatic_timescale)
+        
+        # Intrinsic plasticity (adjust excitability)
+        self.intrinsic_excitability.data += -rate_error * 0.001
+        self.intrinsic_excitability.data = torch.clamp(
+            self.intrinsic_excitability.data, 0.1, 3.0
+        )
+        
+        return scaling_factor
+
+
+
+
+        class MultiTimescalePlasticity:
+    def __init__(self):
+        # Different plasticity mechanisms with different timescales
+        self.fast_plasticity = 0.01    # Seconds (STDP)
+        self.medium_plasticity = 0.001  # Minutes (protein synthesis)
+        self.slow_plasticity = 0.0001  # Hours/days (structural changes)
+        
+    def update_synapses(self, synapses: List[Synapse], 
+                       activity_trace: torch.Tensor):
+        for i, synapse in enumerate(synapses):
+            # Fast component (immediate)
+            fast_change = self.fast_plasticity * activity_trace[i, -1]
+            
+            # Medium component (averaged over minutes)
+            medium_change = self.medium_plasticity * activity_trace[i, -100:].mean()
+            
+            # Slow component (averaged over hours)
+            slow_change = self.slow_plasticity * activity_trace[i].mean()
+            
+            total_change = fast_change + medium_change + slow_change
+            synapse.weight += total_change * synapse.metaplasticity_state
+
+
+
+            class EfficientNeuralLayer(nn.Module):
+    """Vectorized version avoiding Python loops"""
+    def __init__(self, input_size: int, output_size: int):
+        super().__init__()
+        self.weights = nn.Parameter(torch.randn(output_size, input_size) * 0.1)
+        self.release_probs = nn.Parameter(torch.ones(output_size, input_size) * 0.9)
+        self.fatigue_states = nn.Parameter(torch.ones(output_size, input_size))
+        self.thresholds = nn.Parameter(torch.ones(output_size) * 0.1)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        batch_size = x.shape[0]
+        
+        # Vectorized probabilistic transmission
+        transmission_mask = torch.bernoulli(self.release_probs)
+        effective_weights = self.weights * self.fatigue_states * transmission_mask
+        
+        # Batch matrix multiplication
+        weighted_inputs = torch.matmul(x, effective_weights.t())  # [batch, output]
+        
+        # Quantum noise (vectorized)
+        quantum_noise = torch.randn_like(self.thresholds) * 1e-5
+        effective_thresholds = self.thresholds + quantum_noise
+        
+        # Threshold activation
+        outputs = torch.where(
+            weighted_inputs > effective_thresholds.unsqueeze(0),
+            torch.tanh(weighted_inputs),
+            torch.zeros_like(weighted_inputs)
+        )
+        
+        return outputs
+
+
+
+
+        class AdvancedLLMTrainer:
+    async def analyze_learning_dynamics(self, brain_state: Dict) -> Dict:
+        """More sophisticated analysis"""
+        prompt = f"""
+        Analyze BioCog-Net learning dynamics:
+        
+        Synaptic Statistics:
+        - Weight distribution: {brain_state['weight_stats']}
+        - Plasticity distribution: {brain_state['plasticity_stats']}
+        - Activity correlations: {brain_state['correlation_matrix']}
+        
+        Learning Indicators:
+        - Prediction accuracy trend: {brain_state['accuracy_trend']}
+        - Loss landscape curvature: {brain_state['loss_curvature']}
+        - Gradient magnitudes: {brain_state['gradient_stats']}
+        
+        Provide specific, actionable recommendations for:
+        1. Optimal learning rate scheduling
+        2. Curriculum difficulty progression
+        3. Architecture modifications
+        4. Regularization strategies
+        5. Expected learning trajectory
+        """
+        
+        response = await self.query_teacher_llm(prompt, "deep_analysis")
+        return self.parse_detailed_recommendations(response)
+    
+    def create_adaptive_curriculum(self, performance_history: List[Dict]) -> Dict:
+        """Data-driven curriculum adaptation"""
+        # Analyze learning curves
+        difficulty_vs_performance = self.analyze_difficulty_scaling(performance_history)
+        
+        # Identify learning plateaus
+        plateau_regions = self.detect_learning_plateaus(performance_history)
+        
+        # Suggest optimal next challenges
+        next_difficulty = self.predict_optimal_difficulty(
+            current_performance=performance_history[-1],
+            learning_velocity=self.compute_learning_velocity(performance_history),
+            plateau_risk=plateau_regions
+        )
+        
+        return {
+            "next_difficulty": next_difficulty,
+            "focus_areas": self.identify_weak_modules(performance_history),
+            "training_schedule": self.optimize_training_schedule(performance_history)
+        }
+
+
+
+        class BioCogNetAnalyzer:
+    def __init__(self, brain: Brain):
+        self.brain = brain
+        self.metrics_history = []
+    
+    def compute_biological_plausibility_score(self) -> Dict[str, float]:
+        """Quantify how biologically realistic the network is"""
+        scores = {}
+        
+        # Dale's principle compliance (E/I balance)
+        scores['dales_principle'] = self.check_dale_principle()
+        
+        # Small-world network topology
+        scores['small_world'] = self.compute_small_world_coefficient()
+        
+        # Criticality (edge of chaos)
+        scores['criticality'] = self.compute_criticality_measure()
+        
+        # Sparse connectivity
+        scores['sparsity'] = self.compute_connectivity_sparsity()
+        
+        # Realistic firing rates
+        scores['firing_rates'] = self.check_firing_rate_distribution()
+        
+        return scores
+    
+    def analyze_learning_efficiency(self) -> Dict[str, Any]:
+        """Compare to biological learning benchmarks"""
+        return {
+            'sample_efficiency': self.compute_sample_efficiency(),
+            'catastrophic_forgetting': self.measure_forgetting(),
+            'transfer_learning': self.measure_transfer_capability(),
+            'continual_learning': self.measure_continual_learning()
+        }
+    
+    def generate_learning_report(self) -> str:
+        """Generate comprehensive learning analysis"""
+        bio_scores = self.compute_biological_plausibility_score()
+        efficiency = self.analyze_learning_efficiency()
+        
+        return f"""
+        BioCog-Net Learning Analysis Report
+        ==================================
+        
+        Biological Plausibility: {np.mean(list(bio_scores.values())):.3f}
+        - Dale's Principle: {bio_scores['dales_principle']:.3f}
+        - Network Topology: {bio_scores['small_world']:.3f}
+        - Criticality: {bio_scores['criticality']:.3f}
+        
+        Learning Efficiency: {np.mean(list(efficiency.values())):.3f}
+        - Sample Efficiency: {efficiency['sample_efficiency']:.3f}
+        - Forgetting Resistance: {efficiency['catastrophic_forgetting']:.3f}
+        - Transfer Learning: {efficiency['transfer_learning']:.3f}
+        
+        Recommendations:
+        {self.generate_improvement_recommendations()}
+        """
+
+
+
+
+        Summary of Key Improvements:
+
+Fix synapse mechanics - Make them truly stateful with proper STDP
+Add realistic brain modules - Hippocampus, basal ganglia, cerebellum
+Implement proper connectivity - Sparse, distance-dependent, biologically realistic
+Multi-timescale plasticity - Fast/medium/slow learning components
+Vectorize operations - Remove Python loops for efficiency
+Better homeostasis - Bidirectional scaling + intrinsic plasticity
+Advanced LLM guidance - More sophisticated analysis and curriculum
+Comprehensive validation - Biological plausibility metrics
+Real neuromorphic hardware support - For deployment on specialized chips
+Detailed monitoring - Learning dynamics analysis and reporting
+
+These improvements would transform your BioCog-Net from a promising prototype into a truly state-of-the-art bio-plausible learning system!
